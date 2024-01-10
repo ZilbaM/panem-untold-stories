@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panem's Untold Stories - Hunger Games text generator</title>
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+  </head>
+  <body class="my-6 mx-auto prose bg-gray-900">
+    <h1 class="text-white-100">Panem's Untold Stories</h1>
+    <h2 class="text-white-100">Where Every Citizen Has a Tale</h2>
+    <input type="text" id="input" maxlength="120" class="my-4 border border-gray-300 text-red-900 text-sm rounded-lg focus:ring-green-500 focus:border-green-500 block w-full p-2.5"
+    placeholder="Write the first line or let the magic operate by itself..."></input>
+    <div class="mb-4 flex gap-2">
+      <button id="write" class="bg-orange-600 text-orange-100 px-4 py-1 rounded-md hover:text-zinc-400">Get me another episode!</button>
+    </div>
+    <div id="content">
+      <span id="text"></span>
+      <span id="carret" class="text-white animate-ping">|</span>
+    </div>
+    <style>
+        body {
+            background-image: url('./hgback.jpeg');
+            background-size: cover;
+        }
+        body * {
+            color: white !important;
+        }
+        input {
+            color: black !important;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <script type="module">
+      import { encode, decode } from "https://deno.land/x/gpt_2_3_tokenizer@v0.0.2/mod.js"
+      ort.env.wasm.numThread = 4
+      ort.env.wasm.simd = true
+      const opt = { executionProviders: ["wasm"], graphOptimizationLevel: "all" }
+      const session = await ort.InferenceSession.create('./hg1.8bit.onnx', opt)  
+      let running = false
+
+      const text = document.getElementById("text")
+      const display = (token) => {
+        text.innerHTML += token === '\n' ? "<br/><br/>" : token
+      }
+
+      const softmax = (logits, temperature) => {
+        const exps = logits.map((value) => Math.exp(value / temperature))
+        const sumExps = exps.reduce((acc, val) => acc + val)
+        return exps.map((exp) => exp / sumExps)
+      }
+
+      const multinomial = (probas, topK) => {
+        const choices = probas.map((w, i) => ({ w, i })).sort((a, b) => b.w - a.w)
+        const weights = choices.slice(0, topK).map((c) => c.w)
+        const total = weights.reduce((a, c) => a += c)
+        const num = Math.random()
+        let sum = 0
+        for (let weight of weights) {
+          sum += weight / total
+          if (num < sum) return choices.filter(({ w, i }) => w === weight)[0].i
+        }
+        return choices.filter(({ w, i }) => w === weights[-1])[0].i
+      }
+
+      const generate = async (session, ctx, ctxSize, temperature, topK) => {
+        const idxs = encode(ctx).slice(-ctxSize)
+        const input = new ort.Tensor('int64', idxs, [1, idxs.length])
+        const result = await session.run({ 'input': input })
+        const output = [...result.output.data]
+        const logits = output.slice(-output.length / idxs.length)
+        const idx = multinomial(softmax(logits, temperature), topK)
+        ctx = decode([...idxs.slice(-ctxSize + 1), idx])
+        display(decode([idx]))
+        if (running) { requestAnimationFrame(() => generate(session, ctx, ctxSize, temperature, topK)) }
+      }
+
+      const write = async () => {
+        running = true
+        const inputValue = document.getElementById("input").value
+        const ctx = inputValue.length==0 ? "As Peeta approached the tree," : inputValue
+        const ctxSize = 32
+        const temperature = 1.0
+        const topK = Math.min(512, 50_257)
+        text.innerHTML = ctx
+        requestAnimationFrame(() => generate(session, ctx, ctxSize, temperature, topK))
+      }
+
+      const writeBtn = document.getElementById("write")
+      const writeToggle = () => {
+        running = !running
+        writeBtn.innerHTML = running ? "Stop it there" : "Get me another episode !"
+        if (running) { write() }
+      }
+      writeBtn.addEventListener("click", writeToggle)
+    </script>
+  </body>
+</html>
