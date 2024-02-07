@@ -1,4 +1,4 @@
-# F.R.I.E.N.D.S. script generator
+# Hunger Games script generator
 Welcome to Panem's Untold Stories ! This repository is about a Decoder-Only transformer trained over the entire Hunger Games books Saga to be able to create new stories in the style of the Author.
 <br/><br/>It is really easy to use: type a first line in the input and let the magic happen!
 <br/>It is a small model, inspired by [Yliess Hati](https://github.com/yliess86) and [Andrej Karpathy](https://github.com/karpathy). Due to the low performances of my laptop and the small amount of data the model is trained over,  there is a lot of room for improvement and fine-tuning.
